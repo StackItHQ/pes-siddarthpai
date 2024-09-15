@@ -1,5 +1,5 @@
 from flask import Flask,jsonify
-import config
+import testing.config as config
 
 app = Flask(__name__)
 
