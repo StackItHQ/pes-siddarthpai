@@ -1,62 +1,478 @@
-[![Review Assignment Due Date](https://classroom.github.com/assets/deadline-readme-button-22041afd0340ce965d47ae6ef1cefeee28c7c493a6346c4f15d667ab976d596c.svg)](https://classroom.github.com/a/AHFn7Vbn)
-# Superjoin Hiring Assignment
+# Google Sheets-Database Sync
 
-### Welcome to Superjoin's hiring assignment! 🚀
+This project implements a real-time synchronization system between Google Sheets and a PostgreSQL database. It ensures that changes made in either the Google Sheet or the database are reflected in the other, maintaining data consistency across both platforms.
 
-### Objective
-Build a solution that enables real-time synchronization of data between a Google Sheet and a specified database (e.g., MySQL, PostgreSQL). The solution should detect changes in the Google Sheet and update the database accordingly, and vice versa.
+## Features
 
-### Problem Statement
-Many businesses use Google Sheets for collaborative data management and databases for more robust and scalable data storage. However, keeping the data synchronised between Google Sheets and databases is often a manual and error-prone process. Your task is to develop a solution that automates this synchronisation, ensuring that changes in one are reflected in the other in real-time.
+- Real-time bidirectional synchronization between Google Sheets and PostgreSQL database
+- Support for Create, Read, Update, and Delete (CRUD) operations
+- Automatic conflict resolution (last write wins)
+- User-friendly Streamlit interface for data manipulation without any conflicts
+- Efficient polling mechanism for detecting changes
 
-### Requirements:
-1. Real-time Synchronisation
-  - Implement a system that detects changes in Google Sheets and updates the database accordingly.
-   - Similarly, detect changes in the database and update the Google Sheet.
-  2.	CRUD Operations
-   - Ensure the system supports Create, Read, Update, and Delete operations for both Google Sheets and the database.
-   - Maintain data consistency across both platforms.
-   
-### Optional Challenges (This is not mandatory):
-1. Conflict Handling
-- Develop a strategy to handle conflicts that may arise when changes are made simultaneously in both Google Sheets and the database.
-- Provide options for conflict resolution (e.g., last write wins, user-defined rules).
-    
-2. Scalability: 	
-- Ensure the solution can handle large datasets and high-frequency updates without performance degradation.
-- Optimize for scalability and efficiency.
+## Technologies Used
 
-## Submission ⏰
-The timeline for this submission is: **Next 2 days**
+- Python
+- Google Sheets API
+- PostgreSQL
+- Streamlit
+- Pandas
 
-Some things you might want to take care of:
-- Make use of git and commit your steps!
-- Use good coding practices.
-- Write beautiful and readable code. Well-written code is nothing less than a work of art.
-- Use semantic variable naming.
-- Your code should be organized well in files and folders which is easy to figure out.
-- If there is something happening in your code that is not very intuitive, add some comments.
-- Add to this README at the bottom explaining your approach (brownie points 😋)
-- Use ChatGPT4o/o1/Github Co-pilot, anything that accelerates how you work 💪🏽. 
+## Setup and Installation
 
-Make sure you finish the assignment a little earlier than this so you have time to make any final changes.
+1. Clone the repository:
 
-Once you're done, make sure you **record a video** showing your project working. The video should **NOT** be longer than 120 seconds. While you record the video, tell us about your biggest blocker, and how you overcame it! Don't be shy, talk us through, we'd love that.
+   ```
+   git clone git@github.com:StackItHQ/pes-siddarthpai.git
+   cd pes-siddarthpai
+   ```
 
-We have a checklist at the bottom of this README file, which you should update as your progress with your assignment. It will help us evaluate your project.
+2. Install the required dependencies:
 
-- [ ] My code's working just fine! 🥳
-- [ ] I have recorded a video showing it working and embedded it in the README ▶️
-- [ ] I have tested all the normal working cases 😎
-- [ ] I have even solved some edge cases (brownie points) 💪
-- [ ] I added my very planned-out approach to the problem at the end of this README 📜
+   ```
+   pip install -r requirements.txt
+   ```
 
-## Got Questions❓
-Feel free to check the discussions tab, you might get some help there. Check out that tab before reaching out to us. Also, did you know, the internet is a great place to explore? 😛
+3. Set up Google Sheets API credentials:
 
-We're available at techhiring@superjoin.ai for all queries. 
+   - Follow the [Google Sheets API Python Quickstart](https://developers.google.com/sheets/api/quickstart/python) to obtain the necessary credentials.
+   - Save the credentials as `credentials.json` in the project root directory.
 
-All the best ✨.
+4. Configure the PostgreSQL database:
 
-## Developer's Section
-*Add your video here, and your approach to the problem (optional). Leave some comments for us here if you want, we will be reading this :)*
+   - Update the database connection details in `backend.py`:
+     ```python
+     DB_NAME = "your_db_name"
+     DB_USER = "your_db_user"
+     DB_PASSWORD = "your_db_password"
+     DB_HOST = "your_db_host"
+     DB_PORT = "your_db_port"
+     ```
+     - I logged into postgres locally using
+       `psql -U postgres`
+     - Once inside postgres, databases can be viewed using
+       `\l`
+     - Create a new database and then run `\conninfo` to get the details of the connection
+       ![postgres](./images/1.png)
+
+5. Update the Google Sheet ID:
+
+   - Replace `SAMPLE_SPREADSHEET_ID` in `backend.py` with your Google Sheet ID.
+     - to get the SAMPLE_SPREADSHEET_ID, copy the unique id between the `/d` and `/edit` in the URL
+       ![alt text](./images/image.png)
+
+6. Run the Streamlit app:
+   ```
+   streamlit run app.py
+   ```
+
+## Implementation Details
+
+1. **Real-time Synchronization**:
+
+   - Implemented a polling mechanism that checks for changes every 2 seconds.
+   - Uses a `data_changed` event to signal when updates are needed.
+
+2. **CRUD Operations**:
+
+   - **Create:** New records can be added through the Streamlit interface or directly in the Google Sheet/local database.
+   - **Read:** Data is displayed in the Streamlit interface and can be viewed in the Google Sheet/local database.
+   - **Update:** Records can be edited through the Streamlit interface or in the Google Sheet/local database.
+   - **Delete:** Records can be deleted through the Streamlit interface or by removing rows in the Google Sheet/local database.
+
+3. **Conflict Resolution**:
+
+   - In case of conflicting changes between sync cycles, data from the Google Sheet takes precedence.
+   - Changes made in the database are then merged with the sheet data, preserving the most recent state from both sources.
+
+4. **Data Consistency**:
+
+   - Ensures that both the Google Sheet and the database contain the same data after each sync cycle.
+
+5. **Error Handling**:
+
+   - Implements try-except blocks to catch and log errors during synchronization and data operations.
+
+6. **Scalability:**
+   To ensure scalability, I've implemented several optimizations.
+
+   1. First, I'm using batch operations for database updates, which significantly reduces the number of queries for large datasets.
+   2. Implemented an efficient upsert operation to handle both inserts and updates in a single query.
+   3. Higher polling interval to reduce synchronization frequency, and data fetching has been optimized to only retrieve necessary columns.
+   4. Finally, conflict resolution is performed in-memory using pandas, which is highly efficient for data manipulation tasks.
+
+   These optimizations allow the system to handle larger datasets and higher update frequencies without significant performance degradation.
+
+## Plan of Action
+
+First started off by understanding the basics of the stack that I'd be using : **[all of these files can be found in the testing folder]**
+
+1. Configured the Google Sheets API and tested if it was connecting successfully or not. Then created a basic flask app to check. After this stage, I created my first PR and initialized the repo (Created a .gitignore file as well!)
+2. After this I ran my first sync cycle to check the data its retrieving from the sheet and matching it to the Database. I logged this entirely to see before and after and here were the results :
+
+#### before:
+
+![alt text](./images/last_name.png) [the google sheet had no entry of id 10]
+![alt text](./images/s5@gmail.com.png)
+_[I added in 10 to the local database]_
+
+#### after the sync
+
+![alt text](<./images/7 new dude.png>)
+
+##### please find the logs attached at the end[log 1]
+
+### I also tried the other way
+
+#### before:
+
+![alt text](./images/nd@gmail.com.png)
+![alt text](./images/first_name.png)
+_here I inserted in the google sheet_
+
+#### after:
+
+![alt text](./images/1000.00.png)
+
+##### please find the logs attached at the end[log 2]
+
+this is gave me an idea on how I could sync between the 2 sources .
+
+After this I came up with a unified script which had both the frontend and backend code. I finally split the code into the front end and backend to reach the final outcome.
+
+## Outcome
+
+![alt text](./images/image-1.png)
+
+1. **Backend Design**:
+
+   - Created a `backend.py` file to handle all database and Google Sheets operations.
+   - Implemented functions for fetching, updating, and syncing data between the two platforms.
+
+2. **Frontend Design**:
+   ![alt text](./images/frontend.png)
+
+   - Used Streamlit to create a user-friendly interface for data manipulation.
+   - Implemented different views for adding, editing, and deleting records.
+     ![alt text](./images/crudstreamlit.png)
+   - Added in a couple of graphs for visualization so that the user/developer knows whats happening
+     ![alt text](./images/graph.png)
+
+3. **Synchronization Logic**:
+
+   - Developed a `sync_data` function that compares data between the Google Sheet and the database.
+   - Implemented logic to detect and apply changes in both directions.
+
+4. **Continuous Polling**:
+   - Created a background thread that continuously calls the `sync_data` function to keep data up-to-date.
+
+## Challenges and Solutions
+
+1. **Data Type Consistency**: Ensured consistent data types between Google Sheets and PostgreSQL by implementing strict type checking and conversion.
+
+2. **Scopes**: I had to understand how scopes works in google sheets as I need to give read and write permission to read and edit the sheet respectively.
+
+3. **SSL**: I faced issues with SSL certificates when trying to update the sheet and I had to reinstall and reconfigure it.
+
+4. **Real-time Updates**: I Implemented a polling mechanism and used Streamlit's caching to provide near real-time updates without overloading the system.
+
+5. **Error Handling**: I developed robust error handling to manage potential issues with API calls, database connections, and data inconsistencies using try and catch blocks.
+
+## Future Improvements
+
+- Implement websockets for real-time updates instead of polling (I was also looking at GCP's pub/sub model, but couldnt figure it out due to time constraint. The plan was to use pub/sub so that when any change is detected on the sheet, the sheet is directly updated.)
+- Add user authentication and multi-user support (right now the best way I found to implement this was to enforce token generation everytime[requires a google login] but wasn't time effective).
+- Improve conflict resolution strategies with user-defined rules for custom tables
+- Optimize for larger datasets with pagination and lazy loading
+
+## Checklist ✅
+
+- [x] My code's working just fine! 🥳
+- [x] I have recorded a video showing it working and embedded it in the README.
+- [x] I have tested all the normal working cases 😎
+- [x] I have even solved some edge cases 💪
+- [x] I added my very planned-out approach to the problem to this README 📜
+
+### Logs
+
+#### Log 1
+
+```
+Current Google Sheet Data:
+--------------------------------------------------
+[['id', 'first_name', 'last_name', 'email', 'department', 'salary'],
+ ['1', 'A', 'G', 's1@gmail.com', 'D1', '1000'],
+ ['2', 'B', 'H', 's2@gmail.com', 'D1', '1000'],
+ ['3', 'C', 'I', 's3@gmail.com', 'D3', '1000'],
+ ['4', 'D', 'J', 's4@gmail.com', 'D2', '1000'],
+ ['5', 'E', 'K', 's5@gmail.com', 'D4', '1000'],
+ ['6', 'F', 'L', 's6@gmail.com', 'D6', '1000'],
+ ['7', 'new dude', 'i', 'nd@gmail.com', 'D2', '1000']]
+--------------------------------------------------
+
+Current Database Data:
+--------------------------------------------------
+[{'department': 'D1',
+  'email': 's1@gmail.com',
+  'first_name': 'A',
+  'id': 1,
+  'last_name': 'G',
+  'salary': Decimal('1000.00')},
+ {'department': 'D1',
+  'email': 's2@gmail.com',
+  'first_name': 'B',
+  'id': 2,
+  'last_name': 'H',
+  'salary': Decimal('1000.00')},
+ {'department': 'D3',
+  'email': 's3@gmail.com',
+  'first_name': 'C',
+  'id': 3,
+  'last_name': 'I',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 's4@gmail.com',
+  'first_name': 'D',
+  'id': 4,
+  'last_name': 'J',
+  'salary': Decimal('1000.00')},
+ {'department': 'D4',
+  'email': 's5@gmail.com',
+  'first_name': 'E',
+  'id': 5,
+  'last_name': 'K',
+  'salary': Decimal('1000.00')},
+ {'department': 'D6',
+  'email': 's6@gmail.com',
+  'first_name': 'F',
+  'id': 6,
+  'last_name': 'L',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 'nd@gmail.com',
+  'first_name': 'new dude',
+  'id': 7,
+  'last_name': 'i',
+  'salary': Decimal('1000.00')},
+ {'department': 'D8',
+  'email': 'helw@gmail.com',
+  'first_name': 'kai',
+  'id': 10,
+  'last_name': 'c',
+  'salary': Decimal('22000.00')}]
+--------------------------------------------------
+
+Differences detected. Updating...
+Updated database from Google Sheets
+Successfully updated Google Sheets
+
+Updated Google Sheet Data:
+--------------------------------------------------
+[['id', 'first_name', 'last_name', 'email', 'department', 'salary'],
+ ['1', 'A', 'G', 's1@gmail.com', 'D1', '1000'],
+ ['2', 'B', 'H', 's2@gmail.com', 'D1', '1000'],
+ ['3', 'C', 'I', 's3@gmail.com', 'D3', '1000'],
+ ['4', 'D', 'J', 's4@gmail.com', 'D2', '1000'],
+ ['5', 'E', 'K', 's5@gmail.com', 'D4', '1000'],
+ ['6', 'F', 'L', 's6@gmail.com', 'D6', '1000'],
+ ['7', 'new dude', 'i', 'nd@gmail.com', 'D2', '1000'],
+ ['10', 'kai', 'c', 'helw@gmail.com', 'D8', '22000']]
+--------------------------------------------------
+
+Updated Database Data:
+--------------------------------------------------
+[{'department': 'D1',
+  'email': 's1@gmail.com',
+  'first_name': 'A',
+  'id': 1,
+  'last_name': 'G',
+  'salary': Decimal('1000.00')},
+ {'department': 'D1',
+  'email': 's2@gmail.com',
+  'first_name': 'B',
+  'id': 2,
+  'last_name': 'H',
+  'salary': Decimal('1000.00')},
+ {'department': 'D3',
+  'email': 's3@gmail.com',
+  'first_name': 'C',
+  'id': 3,
+  'last_name': 'I',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 's4@gmail.com',
+  'first_name': 'D',
+  'id': 4,
+  'last_name': 'J',
+  'salary': Decimal('1000.00')},
+ {'department': 'D4',
+  'email': 's5@gmail.com',
+  'first_name': 'E',
+  'id': 5,
+  'last_name': 'K',
+  'salary': Decimal('1000.00')},
+ {'department': 'D6',
+  'email': 's6@gmail.com',
+  'first_name': 'F',
+  'id': 6,
+  'last_name': 'L',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 'nd@gmail.com',
+  'first_name': 'new dude',
+  'id': 7,
+  'last_name': 'i',
+  'salary': Decimal('1000.00')},
+ {'department': 'D8',
+  'email': 'helw@gmail.com',
+  'first_name': 'kai',
+  'id': 10,
+  'last_name': 'c',
+  'salary': Decimal('22000.00')}]
+--------------------------------------------------
+```
+
+### Log 2:
+
+```Current Google Sheet Data:
+--------------------------------------------------
+[['id', 'first_name', 'last_name', 'email', 'department', 'salary'],
+ ['1', 'A', 'G', 's1@gmail.com', 'D1', '1000'],
+ ['2', 'B', 'H', 's2@gmail.com', 'D1', '1000'],
+ ['3', 'C', 'I', 's3@gmail.com', 'D3', '1000'],
+ ['4', 'D', 'J', 's4@gmail.com', 'D2', '1000'],
+ ['5', 'E', 'K', 's5@gmail.com', 'D4', '1000'],
+ ['6', 'F', 'L', 's6@gmail.com', 'D6', '1000'],
+ ['7', 'new dude', 'i', 'nd@gmail.com', 'D2', '1000'],
+ ['10', 'kai', 'c', 'helw@gmail.com', 'D8', '22000'],
+ ['12', 'helloooo', 'testestes', 'testtest@gmail.com', 'D10', '1002']]
+--------------------------------------------------
+
+Current Database Data:
+--------------------------------------------------
+[{'department': 'D1',
+  'email': 's1@gmail.com',
+  'first_name': 'A',
+  'id': 1,
+  'last_name': 'G',
+  'salary': Decimal('1000.00')},
+ {'department': 'D1',
+  'email': 's2@gmail.com',
+  'first_name': 'B',
+  'id': 2,
+  'last_name': 'H',
+  'salary': Decimal('1000.00')},
+ {'department': 'D3',
+  'email': 's3@gmail.com',
+  'first_name': 'C',
+  'id': 3,
+  'last_name': 'I',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 's4@gmail.com',
+  'first_name': 'D',
+  'id': 4,
+  'last_name': 'J',
+  'salary': Decimal('1000.00')},
+ {'department': 'D4',
+  'email': 's5@gmail.com',
+  'first_name': 'E',
+  'id': 5,
+  'last_name': 'K',
+  'salary': Decimal('1000.00')},
+ {'department': 'D6',
+  'email': 's6@gmail.com',
+  'first_name': 'F',
+  'id': 6,
+  'last_name': 'L',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 'nd@gmail.com',
+  'first_name': 'new dude',
+  'id': 7,
+  'last_name': 'i',
+  'salary': Decimal('1000.00')},
+ {'department': 'D8',
+  'email': 'helw@gmail.com',
+  'first_name': 'kai',
+  'id': 10,
+  'last_name': 'c',
+  'salary': Decimal('22000.00')}]
+--------------------------------------------------
+
+Differences detected. Updating...
+Updated database from Google Sheets
+Successfully updated Google Sheets
+
+Updated Google Sheet Data:
+--------------------------------------------------
+[['id', 'first_name', 'last_name', 'email', 'department', 'salary'],
+ ['1', 'A', 'G', 's1@gmail.com', 'D1', '1000'],
+ ['2', 'B', 'H', 's2@gmail.com', 'D1', '1000'],
+ ['3', 'C', 'I', 's3@gmail.com', 'D3', '1000'],
+ ['4', 'D', 'J', 's4@gmail.com', 'D2', '1000'],
+ ['5', 'E', 'K', 's5@gmail.com', 'D4', '1000'],
+ ['6', 'F', 'L', 's6@gmail.com', 'D6', '1000'],
+ ['7', 'new dude', 'i', 'nd@gmail.com', 'D2', '1000'],
+ ['10', 'kai', 'c', 'helw@gmail.com', 'D8', '22000'],
+ ['12', 'helloooo', 'testestes', 'testtest@gmail.com', 'D10', '1002']]
+--------------------------------------------------
+
+Updated Database Data:
+--------------------------------------------------
+[{'department': 'D1',
+  'email': 's1@gmail.com',
+  'first_name': 'A',
+  'id': 1,
+  'last_name': 'G',
+  'salary': Decimal('1000.00')},
+ {'department': 'D1',
+  'email': 's2@gmail.com',
+  'first_name': 'B',
+  'id': 2,
+  'last_name': 'H',
+  'salary': Decimal('1000.00')},
+ {'department': 'D3',
+  'email': 's3@gmail.com',
+  'first_name': 'C',
+  'id': 3,
+  'last_name': 'I',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 's4@gmail.com',
+  'first_name': 'D',
+  'id': 4,
+  'last_name': 'J',
+  'salary': Decimal('1000.00')},
+ {'department': 'D4',
+  'email': 's5@gmail.com',
+  'first_name': 'E',
+  'id': 5,
+  'last_name': 'K',
+  'salary': Decimal('1000.00')},
+ {'department': 'D6',
+  'email': 's6@gmail.com',
+  'first_name': 'F',
+  'id': 6,
+  'last_name': 'L',
+  'salary': Decimal('1000.00')},
+ {'department': 'D2',
+  'email': 'nd@gmail.com',
+  'first_name': 'new dude',
+  'id': 7,
+  'last_name': 'i',
+  'salary': Decimal('1000.00')},
+ {'department': 'D8',
+  'email': 'helw@gmail.com',
+  'first_name': 'kai',
+  'id': 10,
+  'last_name': 'c',
+  'salary': Decimal('22000.00')},
+ {'department': 'D10',
+  'email': 'testtest@gmail.com',
+  'first_name': 'helloooo',
+  'id': 12,
+  'last_name': 'testestes',
+  'salary': Decimal('1002.00')}]
+--------------------------------------------------
+```
