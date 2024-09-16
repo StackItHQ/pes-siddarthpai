@@ -119,8 +119,11 @@ First started off by understanding the basics of the stack that I'd be using : *
 #### before:
 
 ![alt text](./images/last_name.png)
+
 [the google sheet had no entry of id 10]
+
 ![alt text](./images/s5@gmail.com.png)
+
 _[I added in 10 to the local database]_
 
 #### after the sync
@@ -135,6 +138,7 @@ _[I added in 10 to the local database]_
 
 ![alt text](./images/nd@gmail.com.png)
 ![alt text](./images/first_name.png)
+
 _here I inserted in the google sheet_
 
 #### after:
