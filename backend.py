@@ -120,49 +120,41 @@ def sync_data():
         create_table_if_not_exists()
         
         sheet_df = fetch_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME)
-        db_df = fetch_db_data()
         
-        # Merge data, preferring sheet data over db data
-        merged_df = pd.concat([db_df, sheet_df]).drop_duplicates(subset='id', keep='last')
-        merged_df = merged_df.sort_values('id').reset_index(drop=True)
+        sheet_df['id'] = pd.to_numeric(sheet_df['id'], errors='coerce').astype(int)
+        sheet_df['salary'] = pd.to_numeric(sheet_df['salary'], errors='coerce').astype(float)
         
-        # Ensure data types
-        merged_df['id'] = pd.to_numeric(merged_df['id'], errors='coerce').astype(int)
-        merged_df['salary'] = pd.to_numeric(merged_df['salary'], errors='coerce').astype(float)
+        sheet_df = sheet_df.dropna()
         
-        # Remove rows with any empty cells
-        merged_df = merged_df.dropna()
+        sheet_df['salary'] = sheet_df['salary'].clip(lower=0, upper=99999999999999.99)
         
-        # ensuring salary is in valid range
-        merged_df['salary'] = merged_df['salary'].clip(lower=0, upper=99999999999999.99)
-        
-        # Update database
-        update_db_data(merged_df)
-        
-        # Update sheet
-        update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, merged_df)
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("TRUNCATE TABLE employees")
+                
+                if not sheet_df.empty:
+                    execute_values(cur, """
+                        INSERT INTO employees (id, first_name, last_name, email, department, salary)
+                        VALUES %s
+                    """, [tuple(x) for x in sheet_df.values])
+            conn.commit()
         
         last_sync_time = time.time()
         
-        return merged_df
+        return sheet_df
     except Exception as e:
         print(f"Error during sync: {e}")
-        # If sync fails, return the latest data from the database
-        return fetch_db_data()
+        return pd.DataFrame(columns=['id', 'first_name', 'last_name', 'email', 'department', 'salary'])
 
 def load_data():
-    try:
-        return sync_data()
-    except Exception as e:
-        print(f"Error loading data: {e}")
-        return pd.DataFrame(columns=['id', 'first_name', 'last_name', 'email', 'department', 'salary'])
+    return sync_data()
 
 def save_data(df):
     sheets_service = get_google_sheets_service()
     
     try:
         update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, df)
-        update_db_data(df)
+        sync_data()  
     except Exception as e:
         print(f"Error saving data: {e}")
         raise
@@ -171,14 +163,10 @@ def delete_record(record_id):
     sheets_service = get_google_sheets_service()
     
     try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("DELETE FROM employees WHERE id = %s", (record_id,))
-            conn.commit()
-        
         sheet_df = fetch_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME)
         sheet_df = sheet_df[sheet_df['id'] != int(record_id)]
         update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, sheet_df)
+        sync_data()  
     except Exception as e:
         print(f"Error deleting record: {e}")
         raise
