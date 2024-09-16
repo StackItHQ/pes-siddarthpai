@@ -6,11 +6,13 @@ This project implements a real-time synchronization system between Google Sheets
 
 - Real-time bidirectional synchronization between Google Sheets and PostgreSQL database
 - Support for Create, Read, Update, and Delete (CRUD) operations
-- Automatic conflict resolution (last write wins)
+- Automatic conflict resolution.
 - User-friendly Streamlit interface for data manipulation without any conflicts
 - Efficient polling mechanism for detecting changes
 
-## Technologies Used
+## Technologies Used 🖥️
+
+As a developer, I tried finding a solution for this problem in the simplest way possible. This was the tech stack I found the most minimal but effective.
 
 - Python
 - Google Sheets API
@@ -70,7 +72,7 @@ This project implements a real-time synchronization system between Google Sheets
 
 1. **Real-time Synchronization**:
 
-   - Implemented a polling mechanism that checks for changes every 2 seconds.
+   - Implemented a polling mechanism that checks for changes every 1-2 seconds.
    - Uses a `data_changed` event to signal when updates are needed.
 
 2. **CRUD Operations**:
@@ -80,10 +82,14 @@ This project implements a real-time synchronization system between Google Sheets
    - **Update:** Records can be edited through the Streamlit interface or in the Google Sheet/local database.
    - **Delete:** Records can be deleted through the Streamlit interface or by removing rows in the Google Sheet/local database.
 
+   These CRUD operations can be performed on one datasource and will be reflected on the other. To ensure highest consistency, the user can feel free to use the streamlit UI which allows for CRUD operations.
+
 3. **Conflict Resolution**:
 
    - In case of conflicting changes between sync cycles, data from the Google Sheet takes precedence.
    - Changes made in the database are then merged with the sheet data, preserving the most recent state from both sources.
+
+   Note: I did try to implement `last write wins` but my implementation technique for that included adding a column to both the google sheet and the database to hold the `last modified time` but realised it wouldn't be effective to add columns to the customer data and hence proceeded with a `user defined rule` approach.
 
 4. **Data Consistency**:
 
@@ -91,19 +97,19 @@ This project implements a real-time synchronization system between Google Sheets
 
 5. **Error Handling**:
 
-   - Implements try-except blocks to catch and log errors during synchronization and data operations.
+   - Implements try-except blocks to catch and log errors during synchronization and data operations. Checks properly for types and ensures that invalid data is rolled back/ignored.
 
 6. **Scalability:**
    To ensure scalability, I've implemented several optimizations.
 
-   1. First, I'm using batch operations for database updates, which significantly reduces the number of queries for large datasets.
-   2. Implemented an efficient upsert operation to handle both inserts and updates in a single query.
+   1. First, I'm using **batch operations** for database updates, which significantly reduces the number of queries for large datasets.
+   2. Implemented an efficient **upsert** operation to handle both inserts and updates in a single query.
    3. Higher polling interval to reduce synchronization frequency, and data fetching has been optimized to only retrieve necessary columns.
    4. Finally, conflict resolution is performed in-memory using pandas, which is highly efficient for data manipulation tasks.
 
    These optimizations allow the system to handle larger datasets and higher update frequencies without significant performance degradation.
 
-## Plan of Action
+## Plan of Action 📝
 
 First started off by understanding the basics of the stack that I'd be using : **[all of these files can be found in the testing folder]**
 
@@ -112,7 +118,8 @@ First started off by understanding the basics of the stack that I'd be using : *
 
 #### before:
 
-![alt text](./images/last_name.png) [the google sheet had no entry of id 10]
+![alt text](./images/last_name.png)
+[the google sheet had no entry of id 10]
 ![alt text](./images/s5@gmail.com.png)
 _[I added in 10 to the local database]_
 
@@ -156,7 +163,6 @@ After this I came up with a unified script which had both the frontend and backe
    - Implemented different views for adding, editing, and deleting records.
      ![alt text](./images/crudstreamlit.png)
    - Added in a couple of graphs for visualization so that the user/developer knows whats happening
-     ![alt text](./images/graph.png)
 
 3. **Synchronization Logic**:
 
@@ -168,7 +174,7 @@ After this I came up with a unified script which had both the frontend and backe
 
 ## Challenges and Solutions
 
-1. **Data Type Consistency**: Ensured consistent data types between Google Sheets and PostgreSQL by implementing strict type checking and conversion.
+1. **Data Type Consistency**: When I first started out, I realised that google sheets doesn't have type checking and that I had to ensure type checking. I then Ensured consistent data types between Google Sheets and PostgreSQL by implementing strict type checking and conversion.
 
 2. **Scopes**: I had to understand how scopes works in google sheets as I need to give read and write permission to read and edit the sheet respectively.
 
@@ -178,9 +184,14 @@ After this I came up with a unified script which had both the frontend and backe
 
 5. **Error Handling**: I developed robust error handling to manage potential issues with API calls, database connections, and data inconsistencies using try and catch blocks.
 
-## Future Improvements
+## Video Link
 
-- Implement websockets for real-time updates instead of polling (I was also looking at GCP's pub/sub model, but couldnt figure it out due to time constraint. The plan was to use pub/sub so that when any change is detected on the sheet, the sheet is directly updated.)
+https://drive.google.com/file/d/1TldAS8F7RFkkPbNBOV4kXKTSoEN4_07y/view?usp=sharing
+
+## Future Improvements 🚀
+
+- Implement websockets for real-time updates instead of polling
+  **(I was also looking at GCP's pub/sub model, but to keep the solution as simple as possible without complicating the tech stack, I found a way without it. The plan was to use pub/sub so that when any change is detected on the sheet, the sheet is directly updated.)**
 - Add user authentication and multi-user support (right now the best way I found to implement this was to enforce token generation everytime[requires a google login] but wasn't time effective).
 - Improve conflict resolution strategies with user-defined rules for custom tables
 - Optimize for larger datasets with pagination and lazy loading
@@ -193,7 +204,7 @@ After this I came up with a unified script which had both the frontend and backe
 - [x] I have even solved some edge cases 💪
 - [x] I added my very planned-out approach to the problem to this README 📜
 
-### Logs
+### Logs 📑
 
 #### Log 1
 

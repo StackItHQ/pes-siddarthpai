@@ -1,6 +1,5 @@
 import os
 import pandas as pd
-import numpy as np
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -8,7 +7,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 import psycopg2
 from psycopg2.extras import execute_values
 import time
-import threading
 
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 SAMPLE_SPREADSHEET_ID = '1s1wErU_ty3XTGRqcN2J3J5vEA7BlMruhHzgFP8xgnnM'
@@ -20,9 +18,7 @@ DB_PASSWORD = "roosh123"
 DB_HOST = "localhost"
 DB_PORT = "5432"
 
-last_sheet_sync_time = None
-last_db_sync_time = None
-data_changed = threading.Event()
+last_sync_time = None
 
 def get_google_sheets_service():
     creds = None
@@ -52,35 +48,15 @@ def create_table_if_not_exists():
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS employees (
-                id INTEGER PRIMARY KEY,
-                first_name VARCHAR(100) NOT NULL,
-                last_name VARCHAR(100) NOT NULL,
-                email VARCHAR(100) NOT NULL,
-                department VARCHAR(100) NOT NULL,
-                salary NUMERIC(16, 2) NOT NULL
+                id SERIAL PRIMARY KEY,
+                first_name VARCHAR(100),
+                last_name VARCHAR(100),
+                email VARCHAR(100),
+                department VARCHAR(100),
+                salary NUMERIC(16, 2)
             )
             """)
             conn.commit()
-
-def validate_and_clean_data(df):
-    # Ensure id is integer
-    df['id'] = pd.to_numeric(df['id'], errors='coerce').astype('Int64')
-    
-    # Ensure salary is float
-    df['salary'] = pd.to_numeric(df['salary'], errors='coerce').astype(float)
-    
-    # Ensure other fields are strings and not empty
-    string_columns = ['first_name', 'last_name', 'email', 'department']
-    for col in string_columns:
-        df[col] = df[col].astype(str).replace('', np.nan)
-    
-    # Drop rows with any null values
-    df = df.dropna()
-    
-    # Clip salary to valid range
-    df['salary'] = df['salary'].clip(lower=0, upper=99999999999999.99)
-    
-    return df
 
 def fetch_sheet_data(service, spreadsheet_id, range_name):
     sheet = service.spreadsheets()
@@ -90,8 +66,14 @@ def fetch_sheet_data(service, spreadsheet_id, range_name):
     if not values:
         return pd.DataFrame(columns=['id', 'first_name', 'last_name', 'email', 'department', 'salary'])
     
-    df = pd.DataFrame(values[1:], columns=values[0])
-    return validate_and_clean_data(df)
+    df = pd.DataFrame(values[1:], columns=values[0]) 
+    
+    df['id'] = pd.to_numeric(df['id'], errors='coerce')
+    df['salary'] = pd.to_numeric(df['salary'], errors='coerce')
+    
+    df = df.fillna({'id': 0, 'first_name': '', 'last_name': '', 'email': '', 'department': '', 'salary': 0})
+    
+    return df
 
 def update_sheet_data(service, spreadsheet_id, range_name, df):
     df = df.astype(object).where(pd.notnull(df), None)
@@ -105,7 +87,7 @@ def update_sheet_data(service, spreadsheet_id, range_name, df):
             return val
 
     values = [[format_value(val) for val in row] for row in df.values.tolist()]
-    values.insert(0, df.columns.tolist())
+    values.insert(0, df.columns.tolist())  
     
     body = {'values': values}
     service.spreadsheets().values().update(
@@ -115,31 +97,20 @@ def update_sheet_data(service, spreadsheet_id, range_name, df):
 def fetch_db_data():
     with get_db_connection() as conn:
         query = "SELECT id, first_name, last_name, email, department, salary FROM employees ORDER BY id"
-        df = pd.read_sql_query(query, conn)
-        return validate_and_clean_data(df)
+        return pd.read_sql_query(query, conn)
 
 def update_db_data(df):
-    df = validate_and_clean_data(df)
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            # Prepare data for upsert
-            data = [tuple(x) for x in df.to_numpy()]
-            
-            # Perform upsert operation
+            cur.execute("TRUNCATE TABLE employees")
             execute_values(cur, """
                 INSERT INTO employees (id, first_name, last_name, email, department, salary)
                 VALUES %s
-                ON CONFLICT (id) DO UPDATE SET
-                    first_name = EXCLUDED.first_name,
-                    last_name = EXCLUDED.last_name,
-                    email = EXCLUDED.email,
-                    department = EXCLUDED.department,
-                    salary = EXCLUDED.salary
-            """, data)
+            """, [tuple(x) for x in df.values])
         conn.commit()
 
 def sync_data():
-    global last_sheet_sync_time, last_db_sync_time, data_changed
+    global last_sync_time
     
     sheets_service = get_google_sheets_service()
     
@@ -149,94 +120,62 @@ def sync_data():
         sheet_df = fetch_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME)
         db_df = fetch_db_data()
         
-        # Identify deleted records
-        sheet_ids = set(sheet_df['id'].astype(int))
-        db_ids = set(db_df['id'].astype(int))
-        deleted_ids = db_ids - sheet_ids
-        
-        # Remove deleted records from the database
-        if deleted_ids:
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM employees WHERE id IN %s", (tuple(map(int, deleted_ids)),))
-                conn.commit()
-            db_df = db_df[~db_df['id'].isin(deleted_ids)]
-            data_changed.set()
-        
-        # Merge data, preferring sheet data for updates
         merged_df = pd.concat([db_df, sheet_df]).drop_duplicates(subset='id', keep='last')
         merged_df = merged_df.sort_values('id').reset_index(drop=True)
         
-        # Validate and clean the merged data
-        merged_df = validate_and_clean_data(merged_df)
+        merged_df['id'] = pd.to_numeric(merged_df['id'], errors='coerce').fillna(0).astype(int)
+        merged_df['salary'] = pd.to_numeric(merged_df['salary'], errors='coerce').fillna(0).astype(float)
         
-        # Convert numpy types to native Python types
-        merged_df = merged_df.astype({
-            'id': int,
-            'first_name': str,
-            'last_name': str,
-            'email': str,
-            'department': str,
-            'salary': float
-        })
+        merged_df = merged_df.fillna({'first_name': '', 'last_name': '', 'email': '', 'department': '', 'salary': 0})
         
-        # Update database if there are changes
-        if not merged_df.equals(db_df):
-            update_db_data(merged_df)
-            last_db_sync_time = time.time()
-            data_changed.set()
+        merged_df['salary'] = merged_df['salary'].clip(lower=0, upper=99999999999999.99)
         
-        # Update sheet if there are changes
-        if not merged_df.equals(sheet_df):
-            update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, merged_df)
-            last_sheet_sync_time = time.time()
-            data_changed.set()
+        update_db_data(merged_df)
+        
+        update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, merged_df)
+        
+        last_sync_time = time.time()
         
         return merged_df
     except Exception as e:
         print(f"Error during sync: {e}")
-        return pd.DataFrame(columns=['id', 'first_name', 'last_name', 'email', 'department', 'salary'])
-    
+        return fetch_db_data()
 
 def load_data():
-    return sync_data()
+    try:
+        return sync_data()
+    except Exception as e:
+        print(f"Error loading data: {e}")
+        return pd.DataFrame(columns=['id', 'first_name', 'last_name', 'email', 'department', 'salary'])
 
 def save_data(df):
+    sheets_service = get_google_sheets_service()
+    
     try:
-        df = validate_and_clean_data(df)
+        update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, df)
         update_db_data(df)
-        sync_data()  # This will ensure the sheet is updated as well
-        data_changed.set()
     except Exception as e:
         print(f"Error saving data: {e}")
         raise
 
 def delete_record(record_id):
+    sheets_service = get_google_sheets_service()
+    
     try:
-        # Ensure record_id is an integer
-        record_id = int(record_id)
-        
-        # Delete from database
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("DELETE FROM employees WHERE id = %s", (record_id,))
             conn.commit()
         
-        # Delete from sheet
-        sheets_service = get_google_sheets_service()
         sheet_df = fetch_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME)
-        sheet_df = sheet_df[sheet_df['id'] != record_id]
+        sheet_df = sheet_df[sheet_df['id'] != int(record_id)]
         update_sheet_data(sheets_service, SAMPLE_SPREADSHEET_ID, SAMPLE_RANGE_NAME, sheet_df)
-        
-        data_changed.set()
-    except ValueError:
-        print(f"Error: Invalid record ID. Must be an integer.")
     except Exception as e:
         print(f"Error deleting record: {e}")
         raise
 
 def get_last_update_times():
-    return last_sheet_sync_time, last_db_sync_time
+    return last_sync_time, last_sync_time
 
 def poll_for_changes():
     while True:
@@ -244,10 +183,4 @@ def poll_for_changes():
             sync_data()
         except Exception as e:
             print(f"Error during synchronization: {e}")
-        time.sleep(10)  # Poll every 10 seconds
-
-def has_data_changed():
-    return data_changed.is_set()
-
-def reset_data_changed():
-    data_changed.clear()
+        time.sleep(2)  

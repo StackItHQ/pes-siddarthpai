@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import time
-from backend import load_data, save_data, delete_record, get_last_update_times, poll_for_changes, has_data_changed, reset_data_changed, sync_data
+import threading
+from backend import load_data, save_data, delete_record, get_last_update_times, poll_for_changes
 from datetime import datetime
-import altair as alt
 
-@st.cache_data(ttl=1)  # cache for 1 second
+@st.cache_data(ttl=10)  # caching for 10 seconds
 def get_data():
     try:
         return load_data()
@@ -16,18 +16,21 @@ def get_data():
 def main():
     st.title("Database Manipulation")
 
-    if 'sync_logs' not in st.session_state:
-        st.session_state.sync_logs = []
+    if 'refresh' not in st.session_state:
+        st.session_state['refresh'] = False
+
+    if st.session_state['refresh']:
+        st.session_state['refresh'] = False
+        st.experimental_rerun()
+
+    if 'sync_thread' not in st.session_state:
+        st.session_state.sync_thread = threading.Thread(target=poll_for_changes, daemon=True)
+        st.session_state.sync_thread.start()
 
     df = get_data()
 
     st.sidebar.header("Actions")
-    action = st.sidebar.radio("Choose an action", ["View Data", "Add Employee", "Edit Employee", "Delete Employee", "Logs"])
-
-    if st.sidebar.button("Refresh Data"):
-        sync_data()
-        st.cache_data.clear()
-        st.rerun()
+    action = st.sidebar.radio("Choose an action", ["View Data", "Add Employee", "Edit Employee", "Delete Employee"])
 
     if action == "View Data":
         st.header("Employee Data")
@@ -55,7 +58,7 @@ def main():
             try:
                 save_data(updated_df)
                 st.success("Employee added successfully!")
-                st.cache_data.clear()
+                st.rerun()
             except Exception as e:
                 st.error(f"Error adding employee: {e}")
 
@@ -75,7 +78,7 @@ def main():
             try:
                 save_data(df)
                 st.success("Employee updated successfully!")
-                st.cache_data.clear()
+                st.rerun()
             except Exception as e:
                 st.error(f"Error updating employee: {e}")
 
@@ -87,44 +90,16 @@ def main():
             try:
                 delete_record(employee_id)
                 st.success("Employee deleted successfully!")
-                st.cache_data.clear()
+                st.rerun()
             except Exception as e:
                 st.error(f"Error deleting employee: {e}")
 
-    elif action == "Logs":
-        st.header("Synchronization Logs")
-        
-        # Create a line chart of sync times
-        if st.session_state.sync_logs:
-            log_df = pd.DataFrame(st.session_state.sync_logs, columns=['timestamp', 'sheet_update', 'db_update'])
-            log_df['timestamp'] = pd.to_datetime(log_df['timestamp'])
-            
-            chart = alt.Chart(log_df).mark_line().encode(
-                x='timestamp:T',
-                y='sheet_update:Q',
-                color=alt.value("blue")
-            ).properties(
-                width=600,
-                height=300,
-                title='Synchronization Times'
-            ) + alt.Chart(log_df).mark_line().encode(
-                x='timestamp:T',
-                y='db_update:Q',
-                color=alt.value("red")
-            )
-            
-            st.altair_chart(chart)
-        else:
-            st.write("No synchronization logs available yet.")
+    if st.sidebar.button("Refresh Data"):
+        st.cache_data.clear()
+        st.rerun()
 
     last_sheet_update, last_db_update = get_last_update_times()
-    st.sidebar.write(f"Last Sheet Sync: {datetime.fromtimestamp(last_sheet_update) if last_sheet_update else 'Never'}")
-    st.sidebar.write(f"Last DB Sync: {datetime.fromtimestamp(last_db_update) if last_db_update else 'Never'}")
-
-    # Add current sync times to logs
-    st.session_state.sync_logs.append([datetime.now(), last_sheet_update, last_db_update])
-    if len(st.session_state.sync_logs) > 100:  # Keep only the last 100 logs
-        st.session_state.sync_logs = st.session_state.sync_logs[-100:]
+    st.sidebar.write(f"Last Sync: {datetime.fromtimestamp(last_sheet_update) if last_sheet_update else 'Never'}")
 
 if __name__ == "__main__":
     main()
