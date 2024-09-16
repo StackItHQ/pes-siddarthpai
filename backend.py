@@ -72,8 +72,8 @@ def fetch_sheet_data(service, spreadsheet_id, range_name):
     df['id'] = pd.to_numeric(df['id'], errors='coerce')
     df['salary'] = pd.to_numeric(df['salary'], errors='coerce')
     
-    # Fill NaN values
-    df = df.fillna({'id': 0, 'first_name': '', 'last_name': '', 'email': '', 'department': '', 'salary': 0})
+    # Remove rows with any empty cells
+    df = df.dropna()
     
     return df
 
@@ -127,13 +127,13 @@ def sync_data():
         merged_df = merged_df.sort_values('id').reset_index(drop=True)
         
         # Ensure data types
-        merged_df['id'] = pd.to_numeric(merged_df['id'], errors='coerce').fillna(0).astype(int)
-        merged_df['salary'] = pd.to_numeric(merged_df['salary'], errors='coerce').fillna(0).astype(float)
+        merged_df['id'] = pd.to_numeric(merged_df['id'], errors='coerce').astype(int)
+        merged_df['salary'] = pd.to_numeric(merged_df['salary'], errors='coerce').astype(float)
         
-        # Fill NaN values
-        merged_df = merged_df.fillna({'first_name': '', 'last_name': '', 'email': '', 'department': '', 'salary': 0})
+        # Remove rows with any empty cells
+        merged_df = merged_df.dropna()
         
-        # ensuring salary is in valud range
+        # ensuring salary is in valid range
         merged_df['salary'] = merged_df['salary'].clip(lower=0, upper=99999999999999.99)
         
         # Update database
